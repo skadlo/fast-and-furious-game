@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fast & Furious</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;900&display=swap');
+        
+        body {
+            margin: 0;
+            background-color: #020617;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Orbitron', sans-serif;
+        }
+        canvas {
+            background: #000;
+            box-shadow: 0 0 100px rgba(0,0,0,1), 0 0 60px rgba(30, 58, 138, 0.4);
+            border-radius: 4px;
+            cursor: crosshair;
+        }
+        .dashboard {
+            position: absolute;
+            top: 40px;
+            width: 480px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .stat-box {
+            background: linear-gradient(180deg, rgba(15, 23, 42, 0.95) 0%, rgba(2, 6, 23, 1) 100%);
+            border-top: 2px solid rgba(255, 255, 255, 0.1);
+            border-bottom: 4px solid #1e40af;
+            padding: 12px 30px;
+            backdrop-filter: blur(12px);
+            clip-path: polygon(15% 0, 100% 0, 85% 100%, 0 100%);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+        }
+        .level-progress-container {
+            position: absolute;
+            bottom: 30px;
+            width: 400px;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 3px;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        #levelBar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #1e40af, #60a5fa, #1e40af);
+            background-size: 200% 100%;
+            animation: nitro-flow 2s linear infinite;
+            box-shadow: 0 0 20px #3b82f6;
+            transition: width 0.2s ease-out;
+        }
+        @keyframes nitro-flow {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 200% 50%; }
+        }
+        .modal {
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(circle at center, rgba(15, 23, 42, 0.98) 0%, rgba(2, 6, 23, 1) 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            text-align: center;
+        }
+        .btn-redline {
+            background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
+            box-shadow: 0 0 40px rgba(30, 64, 175, 0.5);
+            text-transform: uppercase;
+            letter-spacing: 6px;
+            border: 1px solid rgba(255,255,255,0.3);
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        .btn-redline:hover {
+            letter-spacing: 8px;
+            box-shadow: 0 0 60px rgba(30, 64, 175, 0.7);
+            transform: scale(1.05);
+        }
+        .hidden { display: none !important; }
+        #stageName {
+            position: absolute;
+            top: 130px;
+            width: 100%;
+            text-align: center;
+            color: #60a5fa;
+            font-weight: 900;
+            font-style: italic;
+            letter-spacing: 0.5em;
+            text-transform: uppercase;
+            opacity: 0;
+            transition: opacity 0.5s, transform 0.5s;
+            pointer-events: none;
+            z-index: 20;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="stageName" class="text-2xl">Quarter Mile</div>
+
+    <div class="dashboard">
+        <div class="stat-box">
+            <div class="text-[10px] text-blue-400 uppercase tracking-[0.3em] font-bold">Stage</div>
+            <div class="text-3xl font-black italic" id="levelDisplay">01</div>
+        </div>
+        <div class="stat-box text-right">
+            <div class="text-[10px] text-blue-500 uppercase tracking-[0.3em] font-bold">Score</div>
+            <div class="text-3xl font-black italic" id="scoreDisplay">0000</div>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div class="level-progress-container">
+        <div id="levelBar"></div>
+    </div>
+
+    <div id="modal" class="modal">
+        <h1 id="modalTitle" class="text-7xl font-black mb-2 italic tracking-tighter text-white">
+            FAST & <span class="text-blue-600">FURIOUS</span>
+        </h1>
+        <div class="h-1 w-80 bg-blue-600 mb-8"></div>
+        <p id="modalDesc" class="text-slate-400 mb-10 max-w-sm tracking-widest leading-relaxed uppercase text-[10px]">
+            "I live my life a quarter mile at a time." <br> Drive the Deep Navy M-Series.
+        </p>
+        <button id="startBtn" class="btn-redline px-20 py-6 text-white font-black rounded-sm">
+            IGNITION
+        </button>
+        <p class="mt-12 text-[9px] text-slate-700 tracking-[0.5em] uppercase">Use Mouse or Arrows to Steer</p>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const levelDisplay = document.getElementById('levelDisplay');
+        const levelBar = document.getElementById('levelBar');
+        const stageNameUI = document.getElementById('stageName');
+        const modal = document.getElementById('modal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalDesc = document.getElementById('modalDesc');
+        const startBtn = document.getElementById('startBtn');
+
+        const LANE_COUNT = 3;
+        const CANVAS_WIDTH = 460;
+        const CANVAS_HEIGHT = window.innerHeight * 0.85;
+        canvas.width = CANVAS_WIDTH;
+        canvas.height = CANVAS_HEIGHT;
+
+        const CAR_WIDTH = 62;
+        const CAR_HEIGHT = 125;
+        const ROAD_MARGIN = 40; 
+        const ROAD_WIDTH = CANVAS_WIDTH - (ROAD_MARGIN * 2);
+        
+        let gameState = 'MENU';
+        let score = 0;
+        let level = 1;
+        let carsPassedThisLevel = 0;
+        const CARS_PER_LEVEL = 4;
+        let shake = 0;
+        let roadOffset = 0;
+        let enemies = [];
+
+        // 10 LEVELS - Calibrated for a smooth but challenging experience
+        const levelSettings = [
+            { speed: 6.0, spawnRate: 0.012, color: '#64748b', name: "Quarter Mile" },
+            { speed: 7.0, spawnRate: 0.014, color: '#94a3b8', name: "The Warm Up" },
+            { speed: 8.0, spawnRate: 0.016, color: '#fbbf24', name: "L.A. Streets" },
+            { speed: 9.0, spawnRate: 0.018, color: '#ef4444', name: "Nitro Boost" },
+            { speed: 10.0, spawnRate: 0.020, color: '#10b981', name: "Outrun" },
+            { speed: 11.0, spawnRate: 0.022, color: '#8b5cf6', name: "Rio Heist" },
+            { speed: 12.0, spawnRate: 0.024, color: '#f97316', name: "London Chase" },
+            { speed: 13.0, spawnRate: 0.026, color: '#ec4899', name: "Skyline Jump" },
+            { speed: 14.0, spawnRate: 0.028, color: '#06b6d4', name: "Redline" },
+            { speed: 15.5, spawnRate: 0.032, color: '#3b82f6', name: "THE FAMILY" }
+        ];
+
+        const player = {
+            x: CANVAS_WIDTH / 2 - CAR_WIDTH / 2,
+            y: CANVAS_HEIGHT - CAR_HEIGHT - 60,
+            targetX: CANVAS_WIDTH / 2 - CAR_WIDTH / 2,
+            width: CAR_WIDTH,
+            height: CAR_HEIGHT,
+            color: '#0a163a'
+        };
+
+        const handleMove = (x) => {
+            if (gameState !== 'PLAYING') return;
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = (x - rect.left) * (CANVAS_WIDTH / rect.width);
+            const minX = ROAD_MARGIN + 5;
+            const maxX = CANVAS_WIDTH - ROAD_MARGIN - CAR_WIDTH - 5;
+            player.targetX = Math.max(minX, Math.min(maxX, mouseX - CAR_WIDTH / 2));
+        };
+
+        window.addEventListener('mousemove', (e) => handleMove(e.clientX));
+        window.addEventListener('touchmove', (e) => {
+            handleMove(e.touches[0].clientX);
+            e.preventDefault();
+        }, { passive: false });
+
+        window.addEventListener('keydown', (e) => {
+            if (gameState !== 'PLAYING') return;
+            const laneWidth = ROAD_WIDTH / LANE_COUNT;
+            const minX = ROAD_MARGIN + 5;
+            const maxX = CANVAS_WIDTH - ROAD_MARGIN - CAR_WIDTH - 5;
+            if (e.key === 'ArrowLeft') player.targetX = Math.max(minX, player.targetX - laneWidth);
+            if (e.key === 'ArrowRight') player.targetX = Math.min(maxX, player.targetX + laneWidth);
+        });
+
+        function spawnEnemy() {
+            const laneWidth = ROAD_WIDTH / LANE_COUNT;
+            const lane = Math.floor(Math.random() * LANE_COUNT);
+            const x = ROAD_MARGIN + (lane * laneWidth) + (laneWidth / 2) - (CAR_WIDTH / 2);
+            
+            const minGap = CAR_HEIGHT * 3.5; 
+            if (enemies.some(e => e.y < minGap)) return;
+
+            enemies.push({
+                x: x,
+                y: -CAR_HEIGHT - 50,
+                width: CAR_WIDTH,
+                height: CAR_HEIGHT,
+                color: levelSettings[Math.min(level - 1, levelSettings.length-1)].color
+            });
+        }
+
+        function drawBMWLogo(x, y, size) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.fillStyle = '#ccc';
+            ctx.beginPath(); ctx.arc(0, 0, size, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#000';
+            ctx.beginPath(); ctx.arc(0, 0, size * 0.85, 0, Math.PI * 2); ctx.fill();
+            const r = size * 0.45;
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0, 0, r, -Math.PI/2, 0); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0, 0, r, Math.PI/2, Math.PI); ctx.fill();
+            ctx.fillStyle = '#0066b1';
+            ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0, 0, r, 0, Math.PI/2); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0, 0, r, Math.PI, 1.5 * Math.PI); ctx.fill();
+            ctx.restore();
+        }
+
+        function drawCar(car, isPlayer = false) {
+            ctx.save();
+            ctx.translate(car.x, car.y);
+            
+            if (isPlayer) {
+                const grad = ctx.createLinearGradient(0, 0, car.width, 0);
+                grad.addColorStop(0, '#050c21');
+                grad.addColorStop(0.3, '#0a163a');
+                grad.addColorStop(0.5, '#1e3a8a');
+                grad.addColorStop(0.7, '#0a163a');
+                grad.addColorStop(1, '#050c21');
+                
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.roundRect(0, 0, car.width, car.height, [20, 20, 10, 10]);
+                ctx.fill();
+
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+                ctx.beginPath();
+                ctx.roundRect(6, 25, car.width - 12, 38, 8);
+                ctx.fill();
+                
+                ctx.fillStyle = '#111';
+                ctx.fillRect(car.width * 0.22, 4, car.width * 0.24, 6);
+                ctx.fillRect(car.width * 0.54, 4, car.width * 0.24, 6);
+                
+                drawBMWLogo(car.width/2, 14, 5);
+
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#fff';
+                ctx.fillStyle = '#fff';
+                ctx.beginPath(); ctx.arc(14, 8, 3, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(car.width-14, 8, 3, 0, Math.PI*2); ctx.fill();
+                ctx.shadowBlur = 0;
+
+            } else {
+                const grad = ctx.createLinearGradient(0, 0, car.width, 0);
+                grad.addColorStop(0, car.color);
+                grad.addColorStop(0.5, '#222');
+                grad.addColorStop(1, car.color);
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.roundRect(0, 0, car.width, car.height, 12);
+                ctx.fill();
+                ctx.fillStyle = '#000';
+                ctx.fillRect(6, 20, car.width - 12, 35);
+                ctx.fillStyle = '#ef4444';
+                ctx.fillRect(4, car.height - 10, 15, 6);
+                ctx.fillRect(car.width - 19, car.height - 10, 15, 6);
+            }
+            ctx.restore();
+        }
+
+        function drawRoad() {
+            ctx.save();
+            if (shake > 0) {
+                ctx.translate(Math.random() * shake - shake/2, Math.random() * shake - shake/2);
+                shake *= 0.92;
+            }
+
+            ctx.fillStyle = '#020617';
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(ROAD_MARGIN, 0, ROAD_WIDTH, CANVAS_HEIGHT);
+            
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(ROAD_MARGIN - 8, 0, 8, CANVAS_HEIGHT);
+            ctx.fillRect(CANVAS_WIDTH - ROAD_MARGIN, 0, 8, CANVAS_HEIGHT);
+
+            ctx.setLineDash([80, 120]);
+            ctx.lineDashOffset = -roadOffset * 6;
+            ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+            ctx.lineWidth = 4;
+            for (let i = 1; i < LANE_COUNT; i++) {
+                const x = ROAD_MARGIN + i * (ROAD_WIDTH / LANE_COUNT);
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, CANVAS_HEIGHT); ctx.stroke();
+            }
+            ctx.setLineDash([]);
+            ctx.restore();
+        }
+
+        function update() {
+            if (gameState !== 'PLAYING') return;
+
+            const current = levelSettings[Math.min(level - 1, levelSettings.length - 1)];
+            roadOffset += current.speed;
+
+            player.x += (player.targetX - player.x) * 0.18;
+
+            if (Math.random() < current.spawnRate) spawnEnemy();
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const e = enemies[i];
+                e.y += current.speed;
+
+                if (
+                    player.x + 10 < e.x + e.width - 10 &&
+                    player.x + player.width - 10 > e.x + 10 &&
+                    player.y + 12 < e.y + e.height - 12 &&
+                    player.y + player.height - 12 > e.y + 12
+                ) {
+                    gameOver();
+                }
+
+                if (e.y > CANVAS_HEIGHT) {
+                    enemies.splice(i, 1);
+                    score += 500 * level;
+                    carsPassedThisLevel++;
+                    
+                    if (carsPassedThisLevel >= CARS_PER_LEVEL) {
+                        if (level < levelSettings.length) {
+                            level++;
+                            carsPassedThisLevel = 0;
+                            showStageName();
+                            shake = 12;
+                        } else {
+                            gameWon();
+                        }
+                    }
+
+                    scoreDisplay.innerText = score.toString().padStart(4, '0');
+                    levelDisplay.innerText = level.toString().padStart(2, '0');
+                    const progress = (carsPassedThisLevel / CARS_PER_LEVEL) * 100;
+                    levelBar.style.width = progress + '%';
+                }
+            }
+        }
+
+        function showStageName() {
+            const name = levelSettings[level - 1].name;
+            stageNameUI.innerText = name;
+            stageNameUI.style.opacity = 1;
+            stageNameUI.style.transform = "scale(1.1)";
+            setTimeout(() => {
+                stageNameUI.style.opacity = 0;
+                stageNameUI.style.transform = "scale(1)";
+            }, 2200);
+        }
+
+        function draw() {
+            drawRoad();
+            enemies.forEach(e => drawCar(e));
+            drawCar(player, true);
+            requestAnimationFrame(draw);
+            update();
+        }
+
+        function gameOver() {
+            gameState = 'GAMEOVER';
+            modalTitle.innerHTML = "WRECKED";
+            modalDesc.innerText = `Total Score: ${score}. Try again.`;
+            startBtn.innerText = "RUN IT BACK";
+            modal.classList.remove('hidden');
+            shake = 25;
+        }
+
+        function gameWon() {
+            gameState = 'WON';
+            modalTitle.innerHTML = "STREET LEGEND";
+            modalDesc.innerText = `Ultimate performance. Score: ${score}.`;
+            startBtn.innerText = "REPLAY MISSION";
+            modal.classList.remove('hidden');
+        }
+
+        function resetGame() {
+            score = 0;
+            level = 1;
+            carsPassedThisLevel = 0;
+            enemies = [];
+            player.x = CANVAS_WIDTH / 2 - CAR_WIDTH / 2;
+            player.targetX = player.x;
+            scoreDisplay.innerText = "0000";
+            levelDisplay.innerText = "01";
+            levelBar.style.width = "0%";
+            gameState = 'PLAYING';
+            modal.classList.add('hidden');
+            showStageName();
+        }
+
+        startBtn.onclick = resetGame;
+
+        window.onload = () => {
+            draw();
+        };
+    </script>
+</body>
+</html>
