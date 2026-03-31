@@ -192,19 +192,20 @@
         let roadOffset = 0;
         let shake = 0;
         let carsPassed = 0;
-        const TARGET_CARS = 8;
+        const TARGET_CARS = 4;
 
+        // Adjusted speed curve: levels 7-10 are now intense but physically possible
         const levelSettings = [
             { speed: 8, spawn: 0.015, name: "Midnight Run" },
             { speed: 10, spawn: 0.018, name: "Neon District" },
-            { speed: 13, spawn: 0.020, name: "Industrial Zone" },
-            { speed: 16, spawn: 0.022, name: "Speed Demon" },
-            { speed: 20, spawn: 0.025, name: "Redline Fever" },
-            { speed: 25, spawn: 0.028, name: "Ghost Rider" },
-            { speed: 30, spawn: 0.030, name: "Maximum Overdrive" },
-            { speed: 35, spawn: 0.032, name: "Supersonic" },
-            { speed: 42, spawn: 0.035, name: "Hyperdrive" },
-            { speed: 50, spawn: 0.040, name: "THE FAMILY" }
+            { speed: 12, spawn: 0.020, name: "Industrial Zone" },
+            { speed: 14, spawn: 0.021, name: "Speed Demon" },
+            { speed: 17, spawn: 0.022, name: "Redline Fever" },
+            { speed: 20, spawn: 0.023, name: "Ghost Rider" },
+            { speed: 23, spawn: 0.024, name: "Maximum Overdrive" },
+            { speed: 26, spawn: 0.025, name: "Supersonic" },
+            { speed: 29, spawn: 0.026, name: "Hyperdrive" },
+            { speed: 32, spawn: 0.028, name: "THE FAMILY" }
         ];
 
         const ENEMY_COLORS = [
@@ -218,7 +219,9 @@
             y: 0,
             w: 0,
             h: 0,
-            targetX: 0
+            targetX: 0,
+            velocity: 0,
+            tilt: 0
         };
 
         function resize() {
@@ -271,7 +274,20 @@
             const lane = Math.floor(Math.random() * 3);
             const x = roadX + (lane * laneWidth) + (laneWidth / 2) - (player.w / 2);
             
-            if (enemies.some(e => e.y < player.h * 3)) return;
+            const laneIsBusy = enemies.some(e => 
+                Math.abs(e.x - x) < 10 && e.y < player.h * 6 // Even more vertical spacing for high speed safety
+            );
+            if (laneIsBusy) return;
+
+            let occupiedLanesAtTop = 0;
+            for (let l = 0; l < 3; l++) {
+                const laneX = roadX + (l * laneWidth) + (laneWidth / 2) - (player.w / 2);
+                if (enemies.some(e => Math.abs(e.x - laneX) < 10 && e.y < player.h * 3.5)) {
+                    occupiedLanesAtTop++;
+                }
+            }
+            
+            if (occupiedLanesAtTop >= 2) return;
 
             const usedColors = enemies.map(e => e.color);
             const availableColors = ENEMY_COLORS.filter(c => !usedColors.includes(c));
@@ -285,32 +301,24 @@
                 w: player.w,
                 h: player.h,
                 color: chosenColor,
-                speedVar: 0.7 + Math.random() * 0.2
+                speedVar: 0.75 + Math.random() * 0.15 
             });
         }
 
         function drawBMWLogo(w, h, size) {
             ctx.save();
             ctx.translate(w/2, h * 0.1);
-            
-            // Outer ring
             ctx.fillStyle = '#ccc';
             ctx.beginPath(); ctx.arc(0, 0, size, 0, Math.PI * 2); ctx.fill();
-            
-            // Black ring
             ctx.fillStyle = '#000';
             ctx.beginPath(); ctx.arc(0, 0, size * 0.85, 0, Math.PI * 2); ctx.fill();
-            
-            // Inner quadrants
             const r = size * 0.45;
             ctx.fillStyle = '#fff';
             ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0, 0, r, -Math.PI/2, 0); ctx.fill();
             ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0, 0, r, Math.PI/2, Math.PI); ctx.fill();
-            
             ctx.fillStyle = '#0066b1';
             ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0, 0, r, 0, Math.PI/2); ctx.fill();
             ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0, 0, r, Math.PI, 1.5 * Math.PI); ctx.fill();
-            
             ctx.restore();
         }
 
@@ -321,8 +329,12 @@
 
             ctx.save();
             ctx.translate(x, y);
+            if (isPlayer) {
+                ctx.translate(w/2, h/2);
+                ctx.rotate(player.tilt);
+                ctx.translate(-w/2, -h/2);
+            }
 
-            // 1. UNDERGLOW
             ctx.shadowBlur = isPlayer ? 45 : 25;
             ctx.shadowColor = glowColor;
             ctx.fillStyle = glowColor;
@@ -333,12 +345,11 @@
             ctx.globalAlpha = 1;
             ctx.shadowBlur = 0;
 
-            // 2. WIDE-BODY CHASSIS
             const bodyGrad = ctx.createLinearGradient(0, 0, w, 0);
             if (isPlayer) {
                 bodyGrad.addColorStop(0, '#020617');
                 bodyGrad.addColorStop(0.2, '#0a163a');
-                bodyGrad.addColorStop(0.5, '#1e3a8a'); // Deep Navy Metallic
+                bodyGrad.addColorStop(0.5, '#1e3a8a');
                 bodyGrad.addColorStop(0.8, '#0a163a');
                 bodyGrad.addColorStop(1, '#020617');
             } else {
@@ -361,14 +372,7 @@
             ctx.closePath();
             ctx.fill();
 
-            ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-            ctx.lineWidth = 1;
-            ctx.beginPath(); ctx.moveTo(w*0.3, h*0.05); ctx.lineTo(w*0.3, h*0.25); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(w*0.7, h*0.05); ctx.lineTo(w*0.7, h*0.25); ctx.stroke();
-            
-            if (isPlayer) {
-                drawBMWLogo(w, h, w * 0.08);
-            }
+            if (isPlayer) drawBMWLogo(w, h, w * 0.08);
             
             ctx.fillStyle = 'rgba(5, 10, 20, 0.95)'; 
             ctx.beginPath();
@@ -378,9 +382,6 @@
             ctx.lineTo(w * 0.22, h * 0.58);
             ctx.closePath();
             ctx.fill();
-
-            ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-            ctx.beginPath(); ctx.moveTo(w*0.25, h*0.32); ctx.lineTo(w*0.45, h*0.35); ctx.stroke();
 
             ctx.fillStyle = '#050505';
             const wheelW = w * 0.18;
@@ -397,7 +398,6 @@
                 ctx.lineWidth = 2;
                 ctx.beginPath(); ctx.arc(w*0.25, h*0.04, 3, 0, Math.PI*2); ctx.stroke();
                 ctx.beginPath(); ctx.arc(w*0.75, h*0.04, 3, 0, Math.PI*2); ctx.stroke();
-                
                 ctx.shadowColor = '#ff0033';
                 ctx.fillStyle = '#ff0033';
                 ctx.fillRect(w*0.1, h-6, w*0.8, 3);
@@ -408,20 +408,12 @@
                 ctx.fillRect(2, h-10, w*0.25, 6);
                 ctx.fillRect(w - w*0.25 - 2, h-10, w*0.25, 6);
             }
-
-            ctx.shadowBlur = 0;
-            ctx.fillStyle = '#000';
-            ctx.fillRect(-w*0.1, h-14, w*1.2, 8);
-            ctx.fillRect(w*0.15, h-18, 3, 6);
-            ctx.fillRect(w*0.75, h-18, 3, 6);
-
             ctx.restore();
         }
 
         function drawWorld() {
             ctx.fillStyle = '#050505';
             ctx.fillRect(0, 0, width, height);
-            
             ctx.strokeStyle = 'rgba(0, 242, 255, 0.05)';
             ctx.lineWidth = 1;
             const spacing = 80;
@@ -468,10 +460,14 @@
 
         function update() {
             if (gameState !== 'PLAYING') return;
-
             const config = levelSettings[level-1];
             roadOffset += config.speed;
-            player.x += (player.targetX - player.x) * 0.2;
+
+            const steerForce = (player.targetX - player.x) * 0.12;
+            player.velocity = (player.velocity + steerForce) * 0.78;
+            player.x += player.velocity;
+            const targetTilt = player.velocity * 0.04;
+            player.tilt += (targetTilt - player.tilt) * 0.15;
 
             if (Math.random() > 0.4) {
                 createExhaust(player.x + player.w*0.2, player.y + player.h, 'rgba(0, 242, 255, 0.3)');
@@ -483,7 +479,6 @@
             for (let i = enemies.length - 1; i >= 0; i--) {
                 const e = enemies[i];
                 e.y += config.speed * e.speedVar;
-
                 const pBox = { x: player.x + 5, y: player.y + 10, w: player.w - 10, h: player.h - 20 };
                 const eBox = { x: e.x + 5, y: e.y + 10, w: e.w - 10, h: e.h - 20 };
 
@@ -563,6 +558,8 @@
             particles = [];
             player.x = (width / 2) - (player.w / 2);
             player.targetX = player.x;
+            player.velocity = 0;
+            player.tilt = 0;
             gameState = 'PLAYING';
             modal.classList.add('hidden');
             updateHUD();
